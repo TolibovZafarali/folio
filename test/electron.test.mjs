@@ -18,6 +18,17 @@ async function waitForPage(page, number) {
   }, number);
 }
 
+async function setShelf(page, open) {
+  if (await page.locator('#shelf').isVisible() !== open) {
+    await page.locator(open ? '#shelf-toggle' : '#close-shelf').click();
+    // Opening the panel can change the available PDF width on desktop.
+    await page.waitForTimeout(250);
+    if (await page.locator('#reader').isVisible()) {
+      await page.waitForFunction(() => document.querySelector('#reader').getAttribute('aria-busy') === 'false');
+    }
+  }
+}
+
 test('the native app imports, shows update states, pins, resizes and restores its copied PDF after restart', { timeout: 120_000 }, async () => {
   await access(path.join(desktop, 'ui', 'index.html'));
   const directory = await mkdtemp(path.join(tmpdir(), 'folio-electron-test-'));
@@ -45,8 +56,10 @@ test('the native app imports, shows update states, pins, resizes and restores it
   try {
     let page = await launch();
     await page.locator('#welcome').waitFor();
+    await setShelf(page, true);
     // An unpackaged app must report that updates are unavailable, through the
     // actual renderer -> preload -> main command bridge, without doing network I/O.
+    await setShelf(page, true);
     await page.getByRole('button', { name: 'Check for updates', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('#update-message')?.textContent.includes('installed Windows app'));
     assert(await page.locator('#update-banner').isVisible());
@@ -59,11 +72,47 @@ test('the native app imports, shows update states, pins, resizes and restores it
     await waitForPage(page, 1);
     assert.match(await page.locator('#text-content').textContent(), /Manor Farm/);
     assert.equal(await page.locator('#book-title').textContent(), 'Animal Farm');
+    assert(await page.locator('#shelf').isHidden());
+    for (const id of ['text-view', 'pdf-view', 'pin', 'import', 'remove', 'zoom-in']) {
+      assert(await page.locator(`#${id}`).isHidden(), `${id} stays out of the reading page`);
+    }
+    assert(await page.locator('#previous').isDisabled());
+    await page.locator('#next').scrollIntoViewIfNeeded();
+    const layout = await page.evaluate(() => ({
+      end: document.querySelector('#text-page').getBoundingClientRect().bottom,
+      next: document.querySelector('#next').getBoundingClientRect().top,
+    }));
+    assert(layout.next >= layout.end, 'Next page follows the book content');
+    if (process.env.FOLIO_TEST_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.FOLIO_TEST_SCREENSHOTS, 'folio-page-bottom.png') });
+    await page.getByRole('button', { name: 'Next page', exact: true }).click();
+    await waitForPage(page, 2);
+    assert.equal(await page.locator('#viewport').evaluate(element => element.scrollTop), 0);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'text-page');
+    await page.getByRole('button', { name: 'Previous page', exact: true }).click();
+    await waitForPage(page, 1);
+    await setShelf(page, true);
+    const font = page.getByLabel('Book font', { exact: true });
+    const families = new Set();
+    for (const choice of ['sans', 'serif', 'book', 'mono']) {
+      await font.selectOption(choice);
+      families.add(await page.locator('#text-content').evaluate(element => getComputedStyle(element).fontFamily));
+      assert.match(await page.locator('#text-content').textContent(), /Manor Farm/);
+    }
+    assert.equal(families.size, 4, 'each font choice changes the reading font');
+    await font.press('ArrowRight');
+    await waitForPage(page, 1); // Native select navigation must not turn the book page.
+    await font.selectOption('serif');
+    if (process.env.FOLIO_TEST_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.FOLIO_TEST_SCREENSHOTS, 'folio-reading-settings.png') });
+    await setShelf(page, false);
+
     if (process.env.FOLIO_TEST_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.FOLIO_TEST_SCREENSHOTS, 'folio-desktop-reader.png') });
     await page.getByLabel('Page', { exact: true }).fill('7');
     await page.getByLabel('Page', { exact: true }).press('Enter');
     await waitForPage(page, 7);
+    await setShelf(page, true);
     await page.getByRole('button', { name: 'PDF', exact: true }).click();
+    assert(await page.getByLabel('Book font', { exact: true }).isDisabled());
+    await setShelf(page, false);
     assert(await page.locator('#canvas').isVisible());
     const hasInk = await page.locator('#canvas').evaluate(canvas => {
       const bytes = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
@@ -71,7 +120,9 @@ test('the native app imports, shows update states, pins, resizes and restores it
       return false;
     });
     assert(hasInk, 'the PDF canvas should contain the actual page');
+    await setShelf(page, true);
     await page.getByRole('button', { name: 'Keep on top', exact: true }).click();
+    await setShelf(page, false);
     await page.waitForFunction(() => document.querySelector('#pin')?.getAttribute('aria-pressed') === 'true');
     // Ozone's headless platform has no window manager and reports false here.
     // Windows CI verifies real native pinning; Linux still verifies persistence.
@@ -80,7 +131,9 @@ test('the native app imports, shows update states, pins, resizes and restores it
     await page.waitForFunction(() => innerWidth <= 420);
     await page.waitForTimeout(300);
     await waitForPage(page, 7);
+    await setShelf(page, true);
     await page.getByRole('button', { name: 'Text', exact: true }).click();
+    await setShelf(page, false);
     // Exercise the real main-to-preload notification path without downloading
     // or installing an invented release. Controller tests cover installation.
     const currentUpdateState = await page.evaluate(() => window.desktopReader.getUpdateState());
@@ -94,12 +147,14 @@ test('the native app imports, shows update states, pins, resizes and restores it
     await page.getByRole('button', { name: 'Dismiss update message' }).click();
     await announceUpdate({ status: 'available' });
     assert(await page.locator('#update-banner').isHidden(), 'a repeated notification should respect dismissal');
+    await setShelf(page, true);
     await page.getByRole('button', { name: 'Check for updates', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('#update-message')?.textContent.includes('installed Windows app'));
     assert(await page.locator('#update-banner').isVisible(), 'manual checking should reveal the result again');
+    await setShelf(page, false);
     await announceUpdate({ status: 'downloading', percent: 42.4 });
     await page.waitForFunction(() => document.querySelector('#update-message')?.textContent.includes('42%'));
-    assert(await page.getByRole('button', { name: 'Check for updates', exact: true }).isDisabled());
+    assert(await page.locator('#check-updates').isDisabled());
     assert(await page.locator('#update-action').isDisabled());
     assert(await page.getByRole('button', { name: 'Dismiss update message' }).isHidden());
     await page.getByRole('button', { name: 'Previous page', exact: true }).click();
@@ -116,7 +171,10 @@ test('the native app imports, shows update states, pins, resizes and restores it
     await page.waitForTimeout(300);
     await waitForPage(page, 7);
     assert(await page.locator('#update-banner').evaluate(element => element.scrollWidth <= element.clientWidth), 'update banner should fit the minimum window width');
-    assert(await page.locator('.app-header').evaluate(element => element.scrollWidth <= element.clientWidth), 'update control should fit the minimum window width');
+    assert(await page.locator('.page-navigation').evaluate(element => element.scrollWidth <= element.clientWidth), 'page controls should fit the minimum window width');
+    await setShelf(page, true);
+    assert(await page.locator('#reading-font').evaluate(element => element.getBoundingClientRect().right <= innerWidth), 'font chooser fits the minimum window width');
+    await setShelf(page, false);
     if (process.env.FOLIO_TEST_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.FOLIO_TEST_SCREENSHOTS, 'folio-desktop-update-error.png') });
     await page.getByRole('button', { name: 'Try again', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('#update-message')?.textContent.includes('installed Windows app'));
@@ -126,6 +184,15 @@ test('the native app imports, shows update states, pins, resizes and restores it
     await page.waitForTimeout(300);
     await waitForPage(page, 7);
     if (process.env.FOLIO_TEST_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.FOLIO_TEST_SCREENSHOTS, 'folio-desktop-small.png') });
+    await page.locator('#next').scrollIntoViewIfNeeded();
+    if (process.env.FOLIO_TEST_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.FOLIO_TEST_SCREENSHOTS, 'folio-page-bottom-small.png') });
+    await page.getByLabel('Page', { exact: true }).fill('71');
+    await page.getByLabel('Page', { exact: true }).press('Enter');
+    await waitForPage(page, 71);
+    assert(await page.locator('#next').isDisabled());
+    await page.getByLabel('Page', { exact: true }).fill('7');
+    await page.getByLabel('Page', { exact: true }).press('Enter');
+    await waitForPage(page, 7);
     const nativeBounds = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getNormalBounds());
     assert.equal(nativeBounds.width, 420);
     assert.equal(nativeBounds.height, 580);
@@ -142,6 +209,8 @@ test('the native app imports, shows update states, pins, resizes and restores it
     page = await launch();
     await waitForPage(page, 7);
     assert.equal(await page.getByLabel('Page', { exact: true }).inputValue(), '7');
+    assert.equal(await page.getByLabel('Book font', { exact: true }).inputValue(), 'serif');
+    assert.match(await page.locator('#text-content').evaluate(element => getComputedStyle(element).fontFamily), /Georgia/);
     assert.equal(await page.locator('#book-title').textContent(), 'Animal Farm');
     assert.match(await page.locator('#save-status').textContent(), /saved/);
     assert.equal(await page.locator('#pin').getAttribute('aria-pressed'), 'true');

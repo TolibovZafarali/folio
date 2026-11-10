@@ -12,6 +12,28 @@ let book, pdf, loadingTask, renderingTask;
 let pageNumber = 1, zoom = 1, mode = 'text', generation = 0, revision = 0;
 let busy = false;
 let renderedWidth = 0;
+const fonts = {
+  sans: "'Segoe UI', system-ui, sans-serif",
+  serif: "Georgia, 'DejaVu Serif', serif",
+  book: "'Palatino Linotype', Palatino, 'Book Antiqua', 'Bitstream Charter', serif",
+  mono: "Consolas, 'DejaVu Sans Mono', monospace",
+};
+let readingFont = 'sans';
+try {
+  const savedFont = localStorage.getItem('folio.readingFont');
+  if (Object.hasOwn(fonts, savedFont)) readingFont = savedFont;
+} catch { /* Reading still works when preference storage is unavailable. */ }
+function applyFont() {
+  $('reading-font').value = readingFont;
+  $('text-content').style.setProperty('--reading-font', fonts[readingFont]);
+}
+applyFont();
+$('reading-font').onchange = () => {
+  readingFont = $('reading-font').value;
+  applyFont();
+  try { localStorage.setItem('folio.readingFont', readingFont); }
+  catch { notify('This font will be used for this session, but could not be saved.'); }
+};
 
 function notify(message) { $('notice-text').textContent = message; $('notice').hidden = false; }
 $('dismiss-notice').onclick = () => { $('notice').hidden = true; };
@@ -56,6 +78,8 @@ function applyMode() {
   $('text-page').hidden = mode !== 'text'; $('pdf-page').hidden = mode !== 'pdf';
   $('text-view').setAttribute('aria-pressed', String(mode === 'text'));
   $('pdf-view').setAttribute('aria-pressed', String(mode === 'pdf'));
+  $('reading-font').disabled = mode !== 'text';
+  $('font-hint').textContent = mode === 'text' ? 'Choose a font for Text view.' : 'Switch to Text view to change the font.';
   $('text-content').style.fontSize = `${15 * zoom}px`;
 }
 for (const [id, value] of [['text-view', 'text'], ['pdf-view', 'pdf']]) {
@@ -100,6 +124,7 @@ async function openBook(entry) {
   if (token !== generation) return;
   book = entry; pageNumber = entry.page || 1; zoom = 1;
   $('welcome').hidden = true; $('reader').hidden = false;
+  $('reading-settings').hidden = false;
   $('book-title').textContent = entry.title;
   $('book-subtitle').textContent = 'Saved on this computer';
   $('page').value = pageNumber; $('total').textContent = '/ —';
@@ -200,8 +225,13 @@ async function renderPage(number, resetScroll = true) {
     $('page').value = pageNumber;
   } finally { if (token === generation && run === revision) setBusy(false); }
 }
-$('previous').onclick = () => renderPage(Math.max(1, pageNumber - 1));
-$('next').onclick = () => renderPage(Math.min(pdf.numPages, pageNumber + 1));
+async function turnPage(number) {
+  await renderPage(number);
+  // Start the new page at the top, including for keyboard and screen reader users.
+  if (!busy) $(mode === 'text' ? 'text-page' : 'pdf-page').focus({ preventScroll: true });
+}
+$('previous').onclick = () => turnPage(Math.max(1, pageNumber - 1));
+$('next').onclick = () => turnPage(Math.min(pdf.numPages, pageNumber + 1));
 function jump() {
   if (!pdf || busy) return;
   const value = Number($('page').value);
@@ -223,6 +253,7 @@ $('remove').onclick = async () => {
     if (!state.books.some(entry => entry.id === id)) {
       await stopDocument(); book = null;
       $('reader').hidden = true; $('welcome').hidden = false;
+      $('reading-settings').hidden = true;
       drawShelf();
       const next = state.books.find(entry => entry.id === state.activeBookId);
       if (next) await openBook(next);
@@ -232,7 +263,7 @@ $('remove').onclick = async () => {
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !$('shelf').hidden) setShelf(false);
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') { event.preventDefault(); if (!$('import').disabled) importBooks(); return; }
-  if (/^(INPUT|TEXTAREA)$/.test(event.target.tagName) || event.ctrlKey || event.metaKey || event.altKey || !pdf || busy) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) || event.ctrlKey || event.metaKey || event.altKey || !pdf || busy) return;
   if (event.key === 'ArrowRight' && !$('next').disabled) { event.preventDefault(); $('next').click(); }
   if (event.key === 'ArrowLeft' && !$('previous').disabled) { event.preventDefault(); $('previous').click(); }
 });

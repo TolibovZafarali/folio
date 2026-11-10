@@ -15,7 +15,8 @@ Existing 1.1.1 installations still check the original `TolibovZafarali/any-to-pd
 ## Reading and local data
 
 - Use **Open PDF** to import a book. Text view provides reflowed paragraphs; PDF view shows the original page.
-- Use the page field or arrow controls to move through the book. The current page is saved automatically.
+- Previous, Next page, and the page field appear below the current page. Your place is saved automatically. Left and right arrow keys also turn pages.
+- Open the bookshelf panel for reading settings, zoom, pinning, updates, and book actions. Choose Modern sans, Classic serif, Book serif, or Monospace for Text view; your font choice is remembered. PDF view preserves the original document fonts.
 - Resize the window normally and use the pin button to keep it on top.
 - Reopening the app restores the active book and reading position. The bookshelf contains previously imported books.
 
