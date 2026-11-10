@@ -20,9 +20,8 @@ async function waitForPage(page, number) {
 
 async function setShelf(page, open) {
   if (await page.locator('#shelf').isVisible() !== open) {
-    await page.locator(open ? '#shelf-toggle' : '#close-shelf').click();
-    // Opening the panel can change the available PDF width on desktop.
-    await page.waitForTimeout(250);
+    if (open) await page.getByRole('button', { name: 'Show bookshelf', exact: true }).click();
+    else await page.locator('#close-shelf').click();
     if (await page.locator('#reader').isVisible()) {
       await page.waitForFunction(() => document.querySelector('#reader').getAttribute('aria-busy') === 'false');
     }
@@ -56,7 +55,6 @@ test('the native app imports, shows update states, pins, resizes and restores it
   try {
     let page = await launch();
     await page.locator('#welcome').waitFor();
-    await setShelf(page, true);
     // An unpackaged app must report that updates are unavailable, through the
     // actual renderer -> preload -> main command bridge, without doing network I/O.
     await setShelf(page, true);
@@ -73,6 +71,32 @@ test('the native app imports, shows update states, pins, resizes and restores it
     assert.match(await page.locator('#text-content').textContent(), /Manor Farm/);
     assert.equal(await page.locator('#book-title').textContent(), 'Animal Farm');
     assert(await page.locator('#shelf').isHidden());
+    for (const selector of ['.app-brand', '.document-heading']) {
+      assert(await page.locator(selector).isHidden(), `${selector} lives inside the closed panel`);
+    }
+    const readingArea = () => page.locator('#viewport').evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, windowWidth: innerWidth, windowHeight: innerHeight };
+    });
+    let area = await readingArea();
+    assert.deepEqual([area.x, area.y, area.width, area.height], [0, 0, area.windowWidth, area.windowHeight], 'the book viewport fills the app');
+    await page.locator('#viewport').evaluate(element => { element.scrollTop = 150; });
+    const readingScroll = await page.locator('#viewport').evaluate(element => element.scrollTop);
+    await page.keyboard.press('Escape');
+    assert(await page.locator('#shelf').isVisible());
+    assert.equal(await page.locator('#main').evaluate(element => element.inert), true);
+    assert.deepEqual(await readingArea(), area, 'opening the panel must not resize or reflow the book');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.locator('#text-page').getAttribute('data-page'), '1');
+    await page.keyboard.press('Escape');
+    assert(await page.locator('#shelf').isHidden());
+    assert.equal(await page.locator('#viewport').evaluate(element => element.scrollTop), readingScroll, 'closing settings preserves the reading position');
+    await page.keyboard.press('Escape');
+    const backdrop = await page.locator('#shelf-backdrop').boundingBox();
+    await page.locator('#shelf-backdrop').click({ position: { x: backdrop.width - 8, y: 200 } });
+    assert(await page.locator('#shelf').isHidden());
+    assert.equal(await page.locator('#main').evaluate(element => element.inert), false);
+
     for (const id of ['text-view', 'pdf-view', 'pin', 'import', 'remove', 'zoom-in']) {
       assert(await page.locator(`#${id}`).isHidden(), `${id} stays out of the reading page`);
     }
@@ -183,6 +207,8 @@ test('the native app imports, shows update states, pins, resizes and restores it
     await page.waitForFunction(() => innerWidth <= 420 && innerWidth > 360);
     await page.waitForTimeout(300);
     await waitForPage(page, 7);
+    area = await readingArea();
+    assert.deepEqual([area.x, area.y, area.width, area.height], [0, 0, area.windowWidth, area.windowHeight], 'the compact reader also fills the app');
     if (process.env.FOLIO_TEST_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.FOLIO_TEST_SCREENSHOTS, 'folio-desktop-small.png') });
     await page.locator('#next').scrollIntoViewIfNeeded();
     if (process.env.FOLIO_TEST_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.FOLIO_TEST_SCREENSHOTS, 'folio-page-bottom-small.png') });

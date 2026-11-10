@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing release tag, for example reader-v1.1.2'
+        description: 'Existing release tag, for example reader-v1.1.3'
         required: true
         type: string
 
@@ -136,7 +136,9 @@ jobs:
 
           Download `Folio-Reader-Setup-<version>-x64.exe` and run it. The per-user installer requires no administrator access. Import your own PDFs, resize the window, and enable Always on top when needed. Imported books and reading positions are saved locally and restored when you reopen the app.
 
-          Version 1.1.2 moves reading tools into the bookshelf panel, places Previous and Next page below the book content, and adds Modern sans, Classic serif, Book serif, and Monospace choices for Text view. Your font choice is remembered after restart.
+          Version 1.1.3 gives the book the full app window. The logo, book title, and fixed footer no longer take space away from reading. Press Esc or use Bookshelf & settings below the page to open the panel without losing your scroll position. Page navigation and saved progress remain below the book content, and your font choice is remembered after restart.
+
+          In version 1.1.2, click Check for updates, then Update and restart to install this version. Your books, saved pages, and font choice are preserved.
 
           If you have version 1.1.1 from `TolibovZafarali/any-to-pdf`, click Check for updates, then Update and restart. The original feed provides the verified 1.1.2 migration release, preserving your books and reading progress and switching future updates to this repository.
 

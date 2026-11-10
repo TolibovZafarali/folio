@@ -37,16 +37,26 @@ $('reading-font').onchange = () => {
 
 function notify(message) { $('notice-text').textContent = message; $('notice').hidden = false; }
 $('dismiss-notice').onclick = () => { $('notice').hidden = true; };
+let shelfReturnFocus;
 function setShelf(open) {
-  const changed = $('shelf').hidden === open;
+  if (open && $('shelf').hidden) shelfReturnFocus = document.activeElement;
   $('shelf').hidden = !open;
-  $('shelf-toggle').setAttribute('aria-expanded', String(open));
-  $('shelf-toggle').setAttribute('aria-label', open ? 'Hide bookshelf' : 'Show bookshelf');
-  if (!open) $('shelf-toggle').focus();
-  if (changed) resize();
+  $('shelf-backdrop').hidden = !open;
+  $('main').inert = open;
+  for (const id of ['shelf-toggle', 'welcome-shelf']) {
+    $(id).setAttribute('aria-expanded', String(open));
+    $(id).setAttribute('aria-label', open ? 'Hide bookshelf' : 'Show bookshelf');
+  }
+  if (open) $('close-shelf').focus({ preventScroll: true });
+  else {
+    const target = shelfReturnFocus?.isConnected && $('main').contains(shelfReturnFocus)
+      ? shelfReturnFocus : book ? $(mode === 'text' ? 'text-page' : 'pdf-page') : $('welcome-shelf');
+    target.focus({ preventScroll: true });
+  }
 }
-$('shelf-toggle').onclick = () => setShelf($('shelf').hidden);
+$('shelf-toggle').onclick = $('welcome-shelf').onclick = () => setShelf($('shelf').hidden);
 $('close-shelf').onclick = () => setShelf(false);
+$('shelf-backdrop').onclick = () => setShelf(false);
 function drawShelf() {
   $('books').replaceChildren();
   $('empty-shelf').hidden = library.books.length > 0;
@@ -61,7 +71,7 @@ function drawShelf() {
     progress.value = entry.totalPages ? entry.page / entry.totalPages * 100 : 0;
     progress.setAttribute('aria-label', `${entry.title} progress`);
     button.append(title, status, progress); item.append(button); $('books').append(item);
-    button.onclick = () => { if (innerWidth < 640) setShelf(false); openBook(entry); };
+    button.onclick = () => { setShelf(false); openBook(entry); };
   }
 }
 function setBusy(value) {
@@ -181,7 +191,7 @@ async function renderPage(number, resetScroll = true) {
     if (token !== generation || run !== revision) return;
     const raw = page.getViewport({ scale: 1 });
     const viewportWidth = $('viewport').clientWidth;
-    const width = Math.max(240, Math.min(900, viewportWidth - 32));
+    const width = Math.max(240, Math.min(900, viewportWidth));
     const viewport = page.getViewport({ scale: width / raw.width * zoom });
     const ratio = Math.min(devicePixelRatio || 1, 2);
     $('canvas').width = Math.round(viewport.width * ratio); $('canvas').height = Math.round(viewport.height * ratio);
@@ -261,9 +271,9 @@ $('remove').onclick = async () => {
   } catch { notify('Couldn’t remove the book. Please try again.'); }
 };
 window.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !$('shelf').hidden) setShelf(false);
+  if (event.key === 'Escape') { event.preventDefault(); setShelf($('shelf').hidden); return; }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') { event.preventDefault(); if (!$('import').disabled) importBooks(); return; }
-  if (/^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) || event.ctrlKey || event.metaKey || event.altKey || !pdf || busy) return;
+  if (!$('shelf').hidden || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) || event.ctrlKey || event.metaKey || event.altKey || !pdf || busy) return;
   if (event.key === 'ArrowRight' && !$('next').disabled) { event.preventDefault(); $('next').click(); }
   if (event.key === 'ArrowLeft' && !$('previous').disabled) { event.preventDefault(); $('previous').click(); }
 });

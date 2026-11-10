@@ -7,18 +7,17 @@
   <title>Folio Reader</title>
 </head>
 <body>
-  <header class="app-header">
-    <button id="shelf-toggle" class="icon-button" title="Bookshelf and reading settings" aria-label="Show bookshelf" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM9 4v16"/></svg></button>
-    <div class="app-brand"><strong>folio<span>.</span></strong><small>READER</small></div>
-  </header>
   <div id="notice" class="notice" role="status" hidden><span id="notice-text"></span><button id="dismiss-notice" aria-label="Dismiss notification">×</button></div>
   <div id="update-banner" class="update-banner" hidden><p id="update-message" role="status" aria-live="polite"></p><button id="update-action" class="update-action" hidden>Update and restart</button><button id="dismiss-update" class="icon-button" aria-label="Dismiss update message">×</button></div>
   <div class="app-body">
+    <div id="shelf-backdrop" class="shelf-backdrop" hidden></div>
     <aside id="shelf" class="shelf" aria-label="Bookshelf" hidden>
+      <div class="app-brand"><strong>folio<span>.</span></strong><small>READER</small></div>
       <div class="shelf-header"><h2>Your bookshelf</h2><button id="close-shelf" class="icon-button" aria-label="Close bookshelf">×</button></div>
       <p class="shelf-hint">Saved on this computer</p>
       <div id="books"></div><p id="empty-shelf">Your PDFs will appear here.</p>
       <section id="reading-settings" class="reading-settings" aria-labelledby="settings-title" hidden>
+        <div class="document-heading"><h1 id="book-title"></h1><p id="book-subtitle">PDF document</p></div>
         <h2 id="settings-title">Reading settings</h2>
         <div class="setting-row"><span>View</span><div class="view-switch" role="group" aria-label="View mode"><button id="text-view" aria-pressed="true">Text</button><button id="pdf-view" aria-pressed="false">PDF</button></div></div>
         <label for="reading-font">Book font</label>
@@ -33,18 +32,20 @@
     <main id="main">
       <section id="welcome" class="welcome">
         <div class="empty-book" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M10 8h22a5 5 0 0 1 5 5v27H14a4 4 0 0 1-4-4V8Zm0 27a4 4 0 0 1 4-4h23M17 15h12M17 21h9"/></svg></div>
-        <p class="eyebrow">A LITTLE SPACE TO READ</p><h1>Pick up a good book.</h1><p>Open a PDF and make yourself at home.<br>We’ll keep your book and your place.</p><button id="welcome-import" class="primary">Open a PDF <span aria-hidden="true">↗</span></button><span class="welcome-note">Offline. Just you and your next page.</span>
+        <p class="eyebrow">A LITTLE SPACE TO READ</p><h1>Pick up a good book.</h1><p>Open a PDF and make yourself at home.<br>We’ll keep your book and your place.</p><button id="welcome-import" class="primary">Open a PDF <span aria-hidden="true">↗</span></button><span class="welcome-note">Offline. Just you and your next page.</span><button id="welcome-shelf" class="shelf-link" aria-label="Show bookshelf" aria-controls="shelf" aria-expanded="false">Bookshelf &amp; settings</button>
       </section>
       <section id="reader" class="reader" aria-label="PDF reader" hidden>
-        <div class="document-heading"><div><h1 id="book-title"></h1><p id="book-subtitle">PDF document</p></div></div>
-        <div id="viewport" class="viewport"><p id="loading" class="loading" role="status"></p><button id="retry" class="primary" hidden>Try again</button><article id="text-page" class="text-page" tabindex="-1" aria-label="Book page" hidden><div id="page-caption" class="page-caption"></div><div id="text-content"></div></article><div id="pdf-page" class="pdf-page" tabindex="-1" aria-label="Original PDF page" hidden><canvas id="canvas" aria-label="PDF page"></canvas></div>
+        <div id="viewport" class="viewport"><p id="loading" class="loading" role="status"></p><button id="retry" class="primary" hidden>Try again</button><article id="text-page" class="text-page" tabindex="-1" aria-label="Book page" hidden><div id="page-caption" class="sr-only"></div><div id="text-content"></div></article><div id="pdf-page" class="pdf-page" tabindex="-1" aria-label="Original PDF page" hidden><canvas id="canvas" aria-label="PDF page"></canvas></div>
           <nav class="page-navigation" aria-label="Page navigation">
             <button id="previous" class="page-button" aria-label="Previous page"><span aria-hidden="true">←</span> Previous</button>
             <div class="pagination"><label for="page">Page</label><input id="page" type="number" min="1" value="1" aria-label="Page"><span id="total">/ —</span></div>
             <button id="next" class="page-button" aria-label="Next page">Next page <span aria-hidden="true">→</span></button>
           </nav>
+          <footer class="reader-footer">
+            <button id="shelf-toggle" class="shelf-link" title="Bookshelf and reading settings (Esc)" aria-label="Show bookshelf" aria-controls="shelf" aria-keyshortcuts="Escape" aria-expanded="false">Bookshelf &amp; settings <kbd>Esc</kbd></button>
+            <div class="reading-progress"><span id="save-status" role="status">Opening document…</span><progress id="progress" max="100" value="0" aria-label="Reading progress"></progress><span id="percentage">0%</span></div>
+          </footer>
         </div>
-        <footer class="reader-footer"><span id="save-status">Opening document…</span><progress id="progress" max="100" value="0" aria-label="Reading progress"></progress><span id="percentage">0%</span></footer>
       </section>
     </main>
   </div>
