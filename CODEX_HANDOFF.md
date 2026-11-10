@@ -2,9 +2,9 @@
 
 ## What this bundle contains
 
-This is the Windows desktop app extracted from `TolibovZafarali/any-to-pdf`, with the project rooted directly at `package.json`. Its version remains **1.1.1**. It contains the Electron main process and preload, PDF reader interface, persistent local library, updater controller, tests, Windows build/release workflows, and a local PDF test fixture.
+This is the Windows desktop app extracted from `TolibovZafarali/any-to-pdf`, with the project rooted directly at `package.json`. The original source bundle was version **1.1.1**; the current application is **1.1.2**. It contains the Electron main process and preload, PDF reader interface, persistent local library, updater controller, tests, Windows build/release workflows, and a local PDF test fixture.
 
-The website and `/books` web application are not part of this project. Runtime behavior has not been changed by this move. The bundle excludes `.git`, dependencies, built interfaces, release binaries, generated PDF.js assets, environment files, and user libraries. It contains no credentials.
+The website and `/books` web application are not part of this project. The source move preserved runtime behavior. Version 1.1.2 subsequently adds a quieter reading layout and remembered font choices. The bundle excludes `.git`, dependencies, built interfaces, release binaries, generated PDF.js assets, environment files, and user libraries. It contains no credentials.
 
 ## Repository migration status
 
@@ -31,7 +31,7 @@ The unit/native tests use isolated temporary profiles and the included `test/fix
 
 No release is published as part of the source migration. To prepare a later release:
 
-1. Choose a version greater than 1.1.1 and update `package.json` and `package-lock.json` together.
+1. Choose a version greater than 1.1.2 and update `package.json` and `package-lock.json` together.
 2. Run the tests and Windows installer checks on a clean Windows profile:
 
    ```sh

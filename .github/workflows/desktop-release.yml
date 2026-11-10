@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing release tag, for example reader-v1.1.1'
+        description: 'Existing release tag, for example reader-v1.1.2'
         required: true
         type: string
 
@@ -135,6 +135,10 @@ jobs:
           A small PDF reader for Windows 10/11 (64-bit), with in-app updates.
 
           Download `Folio-Reader-Setup-<version>-x64.exe` and run it. The per-user installer requires no administrator access. Import your own PDFs, resize the window, and enable Always on top when needed. Imported books and reading positions are saved locally and restored when you reopen the app.
+
+          Version 1.1.2 moves reading tools into the bookshelf panel, places Previous and Next page below the book content, and adds Modern sans, Classic serif, Book serif, and Monospace choices for Text view. Your font choice is remembered after restart.
+
+          If you have version 1.1.1 from `TolibovZafarali/any-to-pdf`, install this version manually once to switch to this repository's update feed. Your books and reading progress are preserved. The previous installation cannot discover this release through its old feed.
 
           If you used portable version 1.0.0, close it and install this version once. It opens the same local library from `%APPDATA%\Folio Reader\`; your books and saved pages are retained. Future versions can be downloaded and installed from the app's update controls. Installing updates or uninstalling the app retains this library data.
 
