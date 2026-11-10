@@ -15,31 +15,31 @@
       <div class="app-brand"><strong>folio<span>.</span></strong><small>READER</small></div>
       <div class="shelf-header"><h2>Your bookshelf</h2><button id="close-shelf" class="icon-button" aria-label="Close bookshelf">×</button></div>
       <p class="shelf-hint">Saved on this computer</p>
-      <div id="books"></div><p id="empty-shelf">Your PDFs will appear here.</p>
+      <div id="books"></div><p id="empty-shelf">Your books will appear here.</p>
       <section id="reading-settings" class="reading-settings" aria-labelledby="settings-title" hidden>
         <div class="document-heading"><h1 id="book-title"></h1><p id="book-subtitle">PDF document</p></div>
         <h2 id="settings-title">Reading settings</h2>
-        <div class="setting-row"><span>View</span><div class="view-switch" role="group" aria-label="View mode"><button id="text-view" aria-pressed="true">Text</button><button id="pdf-view" aria-pressed="false">PDF</button></div></div>
+        <div id="view-settings" class="setting-row"><span>View</span><div class="view-switch" role="group" aria-label="View mode"><button id="text-view" aria-pressed="true">Text</button><button id="pdf-view" aria-pressed="false">PDF</button></div></div>
         <label for="reading-font">Book font</label>
         <select id="reading-font" aria-describedby="font-hint"><option value="sans">Modern sans</option><option value="serif">Classic serif</option><option value="book">Book serif</option><option value="mono">Monospace</option></select>
         <p id="font-hint" class="setting-hint">Choose a font for Text view.</p>
         <div class="setting-row"><span>Size</span><div class="zoom"><button id="zoom-out" class="icon-button" aria-label="Zoom out">−</button><button id="zoom-reset" title="Reset zoom">100%</button><button id="zoom-in" class="icon-button" aria-label="Zoom in">+</button></div></div>
         <button id="remove" class="remove-book">Remove book</button>
       </section>
-      <div class="shelf-actions"><button id="check-updates" class="icon-button" aria-label="Check for updates" title="Check for updates"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg><span class="update-dot" hidden></span></button><button id="pin" class="icon-button" title="Keep on top" aria-label="Keep on top" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="m8 3 8 0-1 7 3 3v2H6v-2l3-3-1-7ZM12 15v6"/></svg></button><button id="import" class="import-button"><span aria-hidden="true">+</span> Open PDF</button></div>
+      <div class="shelf-actions"><button id="check-updates" class="icon-button" aria-label="Check for updates" title="Check for updates"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg><span class="update-dot" hidden></span></button><button id="pin" class="icon-button" title="Keep on top" aria-label="Keep on top" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="m8 3 8 0-1 7 3 3v2H6v-2l3-3-1-7ZM12 15v6"/></svg></button><button id="import" class="import-button"><span aria-hidden="true">+</span> Open book</button></div>
       <p class="app-version">Folio Reader <span id="app-version"></span></p>
     </aside>
     <main id="main">
       <section id="welcome" class="welcome">
         <div class="empty-book" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M10 8h22a5 5 0 0 1 5 5v27H14a4 4 0 0 1-4-4V8Zm0 27a4 4 0 0 1 4-4h23M17 15h12M17 21h9"/></svg></div>
-        <p class="eyebrow">A LITTLE SPACE TO READ</p><h1>Pick up a good book.</h1><p>Open a PDF and make yourself at home.<br>We’ll keep your book and your place.</p><button id="welcome-import" class="primary">Open a PDF <span aria-hidden="true">↗</span></button><span class="welcome-note">Offline. Just you and your next page.</span><button id="welcome-shelf" class="shelf-link" aria-label="Show bookshelf" aria-controls="shelf" aria-expanded="false">Bookshelf &amp; settings</button>
+        <p class="eyebrow">A LITTLE SPACE TO READ</p><h1>Pick up a good book.</h1><p>Open a PDF or EPUB and make yourself at home.<br>We’ll keep your book and your place.</p><button id="welcome-import" class="primary">Open a book <span aria-hidden="true">↗</span></button><span class="welcome-note">Offline. Just you and your next page.</span><button id="welcome-shelf" class="shelf-link" aria-label="Show bookshelf" aria-controls="shelf" aria-expanded="false">Bookshelf &amp; settings</button>
       </section>
-      <section id="reader" class="reader" aria-label="PDF reader" hidden>
+      <section id="reader" class="reader" aria-label="Book reader" hidden>
         <div id="viewport" class="viewport"><p id="loading" class="loading" role="status"></p><button id="retry" class="primary" hidden>Try again</button><article id="text-page" class="text-page" tabindex="-1" aria-label="Book page" hidden><div id="page-caption" class="sr-only"></div><div id="text-content"></div></article><div id="pdf-page" class="pdf-page" tabindex="-1" aria-label="Original PDF page" hidden><canvas id="canvas" aria-label="PDF page"></canvas></div>
           <nav class="page-navigation" aria-label="Page navigation">
             <button id="previous" class="page-button" aria-label="Previous page"><span aria-hidden="true">←</span> Previous</button>
-            <div class="pagination"><label for="page">Page</label><input id="page" type="number" min="1" value="1" aria-label="Page"><span id="total">/ —</span></div>
-            <button id="next" class="page-button" aria-label="Next page">Next page <span aria-hidden="true">→</span></button>
+            <div class="pagination"><label id="page-label" for="page">Page</label><input id="page" type="number" min="1" value="1" aria-label="Page"><span id="total">/ —</span></div>
+            <button id="next" class="page-button" aria-label="Next page"><span id="next-label">Next page</span> <span aria-hidden="true">→</span></button>
           </nav>
           <footer class="reader-footer">
             <button id="shelf-toggle" class="shelf-link" title="Bookshelf and reading settings (Esc)" aria-label="Show bookshelf" aria-controls="shelf" aria-keyshortcuts="Escape" aria-expanded="false">Bookshelf &amp; settings <kbd>Esc</kbd></button>

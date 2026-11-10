@@ -119,3 +119,57 @@ test('removing a book preserves the original and concurrent reimport keeps a rea
   assert.equal(store.snapshot().activeBookId, null);
   assert((await fs.stat(source)).isFile());
 });
+
+test('EPUB copies, duplicate imports and chapter positions coexist with legacy PDFs', async t => {
+  const { store, data, source, directory } = await fixture(t);
+  const { createEpub } = await import('./fixtures/epub-fixture.mjs');
+  const epubFile = path.join(directory, 'Quiet Garden.epub');
+  const bytes = createEpub();
+  await fs.writeFile(epubFile, bytes);
+  const result = await store.importBooks([source, epubFile]);
+  assert.deepEqual(result.errors, []);
+  const [pdfId, epubId] = result.importedIds;
+  await store.saveProgress({ id: pdfId, page: 7, totalPages: 71 });
+  await store.saveProgress({ id: epubId, page: 2, totalPages: 2, scrollProgress: .45 });
+  await fs.rm(path.join(data, 'books', `${epubId}.epub`));
+  const duplicate = await store.importBooks([epubFile]);
+  assert.deepEqual(duplicate.errors, []);
+  assert.equal(duplicate.library.books[1].scrollProgress, .45);
+  // Existing PDF libraries predate format and EPUB scroll-position fields.
+  const legacy = JSON.parse(await fs.readFile(path.join(data, 'library.json'), 'utf8'));
+  delete legacy.books[0].format; delete legacy.books[0].scrollProgress;
+  await fs.writeFile(path.join(data, 'library.json'), JSON.stringify(legacy));
+  await fs.rm(epubFile);
+  const reopened = await LibraryStore.open(data);
+  assert.equal(reopened.snapshot().books[0].page, 7);
+  assert.equal(reopened.snapshot().books[0].format, 'pdf');
+  assert.equal(reopened.snapshot().books[1].page, 2);
+  assert.equal(reopened.snapshot().books[1].scrollProgress, .45);
+  assert.deepEqual(Buffer.from(await reopened.readBook(epubId)), Buffer.from(bytes));
+  await assert.rejects(reopened.saveProgress({ id: epubId, page: 2, totalPages: 2, scrollProgress: 2 }), /Invalid reading position/);
+  await reopened.removeBook(epubId);
+  await assert.rejects(fs.access(path.join(data, 'books', `${epubId}.epub`)));
+  assert.equal(reopened.snapshot().books[0].page, 7);
+});
+
+test('invalid EPUB archives do not displace imported books', async t => {
+  const { store, directory, source } = await fixture(t);
+  const invalid = path.join(directory, 'broken.epub');
+  await fs.writeFile(invalid, 'not a ZIP');
+  const { createEpub } = await import('./fixtures/epub-fixture.mjs');
+  const disguised = path.join(directory, 'unrelated.epub');
+  await fs.writeFile(disguised, createEpub({ mimetype: new TextEncoder().encode('application/zip') }));
+  const result = await store.importBooks([invalid, disguised, source]);
+  assert.equal(result.errors.length, 2);
+  assert.match(result.errors[0], /damaged or unreadable/);
+  assert.match(result.errors[1], /does not appear to be an EPUB/);
+  assert.equal(result.library.books.length, 1);
+});
+
+
+test('oversized EPUB resources are rejected before decompression', async () => {
+  const { createEpub } = await import('./fixtures/epub-fixture.mjs');
+  const { readEpubArchive } = await import('../epub.mjs');
+  const bytes = createEpub({ 'OPS/oversized.bin': new Uint8Array(32 * 1024 * 1024 + 1) });
+  assert.throws(() => readEpubArchive(bytes), /too large to unpack/);
+});

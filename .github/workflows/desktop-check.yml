@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '*.cjs'
+      - '*.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'vite.config.*'

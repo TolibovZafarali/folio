@@ -71,14 +71,14 @@ else {
     Menu.setApplicationMenu(null);
     handle('reader:get-library', () => store.snapshot());
     handle('reader:import-books', async () => {
-      const result = await dialog.showOpenDialog(window, { title: 'Import PDF books', properties: ['openFile', 'multiSelections'], filters: [{ name: 'PDF documents', extensions: ['pdf'] }] });
+      const result = await dialog.showOpenDialog(window, { title: 'Import books', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Books', extensions: ['pdf', 'epub'] }, { name: 'PDF documents', extensions: ['pdf'] }, { name: 'EPUB books', extensions: ['epub'] }] });
       return result.canceled ? { library: store.snapshot(), importedIds: [], errors: [] } : store.importBooks(result.filePaths);
     });
     handle('reader:read-book', id => store.readBook(id));
     handle('reader:save-progress', progress => store.saveProgress(progress));
     handle('reader:remove-book', async id => {
       const book = store.requireBook(id);
-      const result = await dialog.showMessageBox(window, { type: 'question', title: 'Remove book', message: `Remove “${book.title}” from this library?`, detail: 'The imported copy and its reading progress will be deleted. Your original PDF will stay where it is.', buttons: ['Keep book', 'Remove book'], defaultId: 0, cancelId: 0, noLink: true });
+      const result = await dialog.showMessageBox(window, { type: 'question', title: 'Remove book', message: `Remove “${book.title}” from this library?`, detail: 'The imported copy and its reading progress will be deleted. Your original file will stay where it is.', buttons: ['Keep book', 'Remove book'], defaultId: 0, cancelId: 0, noLink: true });
       return result.response === 1 ? store.removeBook(id) : store.snapshot();
     });
     handle('reader:set-always-on-top', async value => { await store.setAlwaysOnTop(value); window.setAlwaysOnTop(value); return value; });

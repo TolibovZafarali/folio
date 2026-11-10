@@ -2,7 +2,7 @@
 
 ## What this bundle contains
 
-This is the Windows desktop app extracted from `TolibovZafarali/any-to-pdf`, with the project rooted directly at `package.json`. The original source bundle was version **1.1.1**; the current application is **1.1.3**. It contains the Electron main process and preload, PDF reader interface, persistent local library, updater controller, tests, Windows build/release workflows, and a local PDF test fixture.
+This is the Windows desktop app extracted from `TolibovZafarali/any-to-pdf`, with the project rooted directly at `package.json`. The original source bundle was version **1.1.1**; the current application is **1.2.0**. It contains the Electron main process and preload, PDF/EPUB reader interface, persistent local library, updater controller, tests, Windows build/release workflows, and a local PDF test fixture.
 
 The website and `/books` web application are not part of this project. The source move preserved runtime behavior. Version 1.1.2 subsequently adds a quieter reading layout and remembered font choices. The bundle excludes `.git`, dependencies, built interfaces, release binaries, generated PDF.js assets, environment files, and user libraries. It contains no credentials.
 
@@ -31,7 +31,7 @@ The unit/native tests use isolated temporary profiles and the included `test/fix
 
 No release is published as part of the source migration. To prepare a later release:
 
-1. Choose a version greater than 1.1.3 and update `package.json` and `package-lock.json` together.
+1. Choose a version greater than 1.2.0 and update `package.json` and `package-lock.json` together.
 2. Run the tests and Windows installer checks on a clean Windows profile:
 
    ```sh
@@ -69,7 +69,8 @@ Existing users click **Check for updates**, then **Update and restart**. The upd
 - `main.cjs`, `preload.cjs`, `trusted-entry.cjs`: native window and constrained IPC
 - `library.cjs`: copied PDFs and atomic local state persistence
 - `updates.cjs`: checked updates and save-before-restart behavior
-- `renderer/`: the reader interface and browser-side PDF rendering
+- `epub.mjs`: bounded EPUB archive loading, shared by storage and the renderer
+- `renderer/`: the reader interface, browser-side PDF rendering, and sanitized EPUB chapters
 - `scripts/`: PDF.js resource preparation and release verification
 - `test/`: unit, native Electron, and Windows installed-app tests, with local fixtures
 - `.github/workflows/`: standalone CI and Windows release automation

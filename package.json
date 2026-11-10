@@ -1,7 +1,7 @@
 {
   "name": "folio-reader",
-  "version": "1.1.3",
-  "description": "A compact offline PDF reader with a persistent local bookshelf.",
+  "version": "1.2.0",
+  "description": "A compact offline PDF and EPUB reader with a persistent local bookshelf.",
   "author": "TolibovZafarali",
   "private": true,
   "type": "module",
@@ -24,6 +24,7 @@
       "main.cjs",
       "preload.cjs",
       "library.cjs",
+      "epub.mjs",
       "ui/**/*",
       "package.json",
       "updates.cjs",
@@ -75,6 +76,7 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "fflate": "0.8.3"
   }
 }

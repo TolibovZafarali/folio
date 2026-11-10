@@ -2,13 +2,15 @@ import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import worker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import './style.css';
 import { wireUpdates } from './updates.js';
+import { openEpub } from './epub.js';
 
 GlobalWorkerOptions.workerSrc = worker;
 const api = window.desktopReader;
 const $ = id => document.getElementById(id);
 const assets = new URL('./pdfjs/', location.href).href;
 let library = { books: [], activeBookId: null, alwaysOnTop: false };
-let book, pdf, loadingTask, renderingTask;
+let book, pdf, epub, loadingTask, renderingTask;
+const pageCount = () => epub?.numPages || pdf?.numPages || 0;
 let pageNumber = 1, zoom = 1, mode = 'text', generation = 0, revision = 0;
 let busy = false;
 let renderedWidth = 0;
@@ -31,6 +33,7 @@ applyFont();
 $('reading-font').onchange = () => {
   readingFont = $('reading-font').value;
   applyFont();
+  if (epub) restoreChapterScroll(book.scrollProgress || 0);
   try { localStorage.setItem('folio.readingFont', readingFont); }
   catch { notify('This font will be used for this session, but could not be saved.'); }
 };
@@ -47,7 +50,7 @@ function setShelf(open) {
     $(id).setAttribute('aria-expanded', String(open));
     $(id).setAttribute('aria-label', open ? 'Hide bookshelf' : 'Show bookshelf');
   }
-  if (open) $('close-shelf').focus({ preventScroll: true });
+  if (open) { drawShelf(); $('close-shelf').focus({ preventScroll: true }); }
   else {
     const target = shelfReturnFocus?.isConnected && $('main').contains(shelfReturnFocus)
       ? shelfReturnFocus : book ? $(mode === 'text' ? 'text-page' : 'pdf-page') : $('welcome-shelf');
@@ -66,9 +69,9 @@ function drawShelf() {
     button.setAttribute('aria-current', String(book?.id === entry.id));
     const title = document.createElement('span'); title.className = 'book-title'; title.textContent = entry.title;
     const status = document.createElement('span'); status.className = 'book-status';
-    status.textContent = entry.totalPages ? `Page ${entry.page} of ${entry.totalPages}` : 'Ready to read';
+    status.textContent = entry.totalPages ? `${entry.format === 'epub' ? 'Chapter' : 'Page'} ${entry.page} of ${entry.totalPages}` : 'Ready to read';
     const progress = document.createElement('progress'); progress.className = 'book-progress'; progress.max = 100;
-    progress.value = entry.totalPages ? entry.page / entry.totalPages * 100 : 0;
+    progress.value = entry.totalPages ? (entry.format === 'epub' ? entry.page - 1 + (entry.scrollProgress || 0) : entry.page) / entry.totalPages * 100 : 0;
     progress.setAttribute('aria-label', `${entry.title} progress`);
     button.append(title, status, progress); item.append(button); $('books').append(item);
     button.onclick = () => { setShelf(false); openBook(entry); };
@@ -77,14 +80,15 @@ function drawShelf() {
 function setBusy(value) {
   busy = value;
   $('reader').setAttribute('aria-busy', String(value));
-  for (const id of ['page', 'pdf-view', 'text-view', 'zoom-reset']) $(id).disabled = value || !pdf;
-  $('previous').disabled = value || !pdf || pageNumber <= 1;
-  $('next').disabled = value || !pdf || pageNumber >= pdf.numPages;
-  $('zoom-out').disabled = value || !pdf || zoom <= 0.7;
-  $('zoom-in').disabled = value || !pdf || zoom >= 2;
+  for (const id of ['page', 'pdf-view', 'text-view', 'zoom-reset']) $(id).disabled = value || !pageCount();
+  $('previous').disabled = value || !pageCount() || pageNumber <= 1;
+  $('next').disabled = value || !pageCount() || pageNumber >= pageCount();
+  $('zoom-out').disabled = value || !pageCount() || zoom <= 0.7;
+  $('zoom-in').disabled = value || !pageCount() || zoom >= 2;
   $('remove').disabled = !book;
 }
 function applyMode() {
+  if (epub) mode = 'text';
   $('text-page').hidden = mode !== 'text'; $('pdf-page').hidden = mode !== 'pdf';
   $('text-view').setAttribute('aria-pressed', String(mode === 'text'));
   $('pdf-view').setAttribute('aria-pressed', String(mode === 'pdf'));
@@ -105,7 +109,7 @@ async function importBooks() {
       setShelf(false);
       await openBook(library.books.find(entry => entry.id === result.importedIds[0]));
     }
-  } catch (error) { notify(`Couldn’t import the PDF: ${error.message}`); }
+  } catch (error) { notify(`Couldn’t import the book: ${error.message}`); }
   finally { $('import').disabled = $('welcome-import').disabled = false; }
 }
 $('import').onclick = $('welcome-import').onclick = importBooks;
@@ -124,6 +128,8 @@ function updatePin() {
 async function stopDocument() {
   const token = ++generation; ++revision;
   renderingTask?.cancel();
+  await progressRequest;
+  epub?.dispose(); epub = null;
   const oldTask = loadingTask; loadingTask = null; pdf = null;
   await oldTask?.destroy().catch(() => {});
   return token;
@@ -136,16 +142,31 @@ async function openBook(entry) {
   $('welcome').hidden = true; $('reader').hidden = false;
   $('reading-settings').hidden = false;
   $('book-title').textContent = entry.title;
-  $('book-subtitle').textContent = 'Saved on this computer';
+  const isEpub = entry.format === 'epub';
+  $('book-subtitle').textContent = `${isEpub ? 'EPUB' : 'PDF'} · Saved on this computer`;
+  $('view-settings').hidden = isEpub;
+  $('page-label').textContent = isEpub ? 'Chapter' : 'Page';
+  $('page').setAttribute('aria-label', isEpub ? 'Chapter' : 'Page');
+  $('previous').setAttribute('aria-label', isEpub ? 'Previous chapter' : 'Previous page');
+  $('next').setAttribute('aria-label', isEpub ? 'Next chapter' : 'Next page');
+  $('next-label').textContent = isEpub ? 'Next chapter' : 'Next page';
+  $('text-content').classList.toggle('epub-content', isEpub);
   $('page').value = pageNumber; $('total').textContent = '/ —';
   $('zoom-reset').textContent = '100%';
-  $('loading').textContent = 'Opening your PDF…'; $('loading').hidden = false;
+  $('loading').textContent = 'Opening your book…'; $('loading').hidden = false;
   $('pdf-page').hidden = $('text-page').hidden = $('retry').hidden = true;
   $('save-status').textContent = 'Opening document…'; $('progress').value = 0; $('percentage').textContent = '—';
   drawShelf(); setBusy(true);
   try {
     const bytes = await api.readBook(entry.id);
     if (token !== generation) return;
+    if (isEpub) {
+      epub = openEpub(bytes); mode = 'text';
+      pageNumber = Math.min(pageNumber, epub.numPages);
+      $('total').textContent = `/ ${epub.numPages}`; $('page').max = epub.numPages;
+      await renderEpubPage(pageNumber, entry.scrollProgress || 0);
+      return;
+    }
     loadingTask = getDocument({ data: new Uint8Array(bytes), cMapUrl: `${assets}cmaps/`, cMapPacked: true, standardFontDataUrl: `${assets}standard_fonts/`, wasmUrl: `${assets}wasm/`, isEvalSupported: false });
     const loaded = await loadingTask.promise;
     if (token !== generation) return;
@@ -154,10 +175,78 @@ async function openBook(entry) {
     await renderPage(pageNumber);
   } catch (error) {
     if (token !== generation) return;
-    console.error('Unable to open PDF:', error);
-    $('loading').textContent = error.name === 'PasswordException' ? 'This PDF is password-protected. Open an unprotected copy to read it here.' : 'This PDF could not be opened. It may be damaged or unavailable.';
+    console.error('Unable to open book:', error);
+    $('loading').textContent = isEpub ? error.message : error.name === 'PasswordException' ? 'This PDF is password-protected. Open an unprotected copy to read it here.' : 'This PDF could not be opened. It may be damaged or unavailable.';
     $('loading').hidden = false; $('retry').hidden = false;
-    $('save-status').textContent = 'Couldn’t open PDF'; setBusy(false);
+    $('save-status').textContent = 'Couldn’t open book'; setBusy(false);
+  }
+}
+function restoreChapterScroll(fraction) {
+  const viewport = $('viewport');
+  viewport.scrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight) * fraction;
+}
+let progressRequest = null, pendingProgress = null;
+function saveEpubPosition() {
+  if (!epub || busy || !book) return;
+  const viewport = $('viewport');
+  const height = viewport.scrollHeight - viewport.clientHeight;
+  book.scrollProgress = height > 0 ? Math.max(0, Math.min(1, viewport.scrollTop / height)) : 0;
+  const percentage = Math.round((pageNumber - 1 + book.scrollProgress) / epub.numPages * 100);
+  $('percentage').textContent = `${percentage}%`; $('progress').value = percentage;
+  pendingProgress = { id: book.id, page: pageNumber, totalPages: epub.numPages, scrollProgress: book.scrollProgress };
+  if (progressRequest) return;
+  $('save-status').textContent = 'Saving your place…';
+  progressRequest = (async () => {
+    try {
+      while (pendingProgress) {
+        const progress = pendingProgress; pendingProgress = null;
+        await api.saveProgress(progress);
+      }
+      $('save-status').textContent = 'Your place is saved';
+    } catch {
+      pendingProgress = null;
+      $('save-status').textContent = 'Position not saved';
+      notify('Your place could not be saved. Check that your app data folder is writable.');
+    } finally { progressRequest = null; }
+  })();
+}
+$('viewport').addEventListener('scroll', saveEpubPosition, { passive: true });
+async function renderEpubPage(number, fraction = 0, fragment = '') {
+  const token = generation, run = ++revision, document = epub;
+  let rendered = false;
+  setBusy(true);
+  await progressRequest;
+  if (token !== generation || run !== revision) return;
+  $('loading').textContent = 'Opening chapter…'; $('loading').hidden = false;
+  $('pdf-page').hidden = $('text-page').hidden = true;
+  try {
+    const chapter = document.chapter(number, (target, anchor) => renderEpubPage(target, 0, anchor));
+    $('text-content').replaceChildren(chapter.content);
+    $('text-content').dir = chapter.direction;
+    $('loading').hidden = $('retry').hidden = true;
+    pageNumber = number; $('page').value = number;
+    $('text-page').dataset.page = number;
+    $('page-caption').textContent = `CHAPTER ${number} OF ${document.numPages}`;
+    $('zoom-reset').textContent = `${Math.round(zoom * 100)}%`;
+    applyMode();
+    await Promise.all(chapter.images.map(img => img.decode().catch(() => {})));
+    if (token !== generation || run !== revision) return;
+    restoreChapterScroll(fraction);
+    if (fragment) chapter.anchors.get(fragment)?.scrollIntoView({ block: 'start' });
+    const percentage = Math.round(number / document.numPages * 100);
+    $('percentage').textContent = `${percentage}%`; $('progress').value = percentage;
+    const saved = await api.saveProgress({ id: book.id, page: number, totalPages: document.numPages, scrollProgress: fraction });
+    if (token !== generation || run !== revision) return;
+    library = saved; book = saved.books.find(entry => entry.id === book.id); drawShelf();
+    $('save-status').textContent = 'Your place is saved';
+    rendered = true;
+  } catch (error) {
+    if (token !== generation || run !== revision) return;
+    $('text-page').hidden = true;
+    $('loading').textContent = error.message || 'This chapter could not be opened.';
+    $('loading').hidden = false; $('retry').hidden = false;
+  } finally {
+    if (token === generation && run === revision) { setBusy(false); if (rendered) saveEpubPosition(); }
   }
 }
 function textParagraphs(items) {
@@ -181,6 +270,7 @@ function textParagraphs(items) {
   return paragraphs;
 }
 async function renderPage(number, resetScroll = true) {
+  if (epub) return renderEpubPage(number, resetScroll ? 0 : book.scrollProgress || 0);
   if (!pdf) return;
   const token = generation, run = ++revision;
   renderingTask?.cancel(); setBusy(true);
@@ -241,11 +331,11 @@ async function turnPage(number) {
   if (!busy) $(mode === 'text' ? 'text-page' : 'pdf-page').focus({ preventScroll: true });
 }
 $('previous').onclick = () => turnPage(Math.max(1, pageNumber - 1));
-$('next').onclick = () => turnPage(Math.min(pdf.numPages, pageNumber + 1));
+$('next').onclick = () => turnPage(Math.min(pageCount(), pageNumber + 1));
 function jump() {
-  if (!pdf || busy) return;
+  if (!pageCount() || busy) return;
   const value = Number($('page').value);
-  if (Number.isInteger(value) && value >= 1 && value <= pdf.numPages) renderPage(value);
+  if (Number.isInteger(value) && value >= 1 && value <= pageCount()) renderPage(value);
   else $('page').value = pageNumber;
 }
 $('page').onchange = jump;
@@ -273,7 +363,7 @@ $('remove').onclick = async () => {
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape') { event.preventDefault(); setShelf($('shelf').hidden); return; }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') { event.preventDefault(); if (!$('import').disabled) importBooks(); return; }
-  if (!$('shelf').hidden || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) || event.ctrlKey || event.metaKey || event.altKey || !pdf || busy) return;
+  if (!$('shelf').hidden || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) || event.ctrlKey || event.metaKey || event.altKey || !pageCount() || busy) return;
   if (event.key === 'ArrowRight' && !$('next').disabled) { event.preventDefault(); $('next').click(); }
   if (event.key === 'ArrowLeft' && !$('previous').disabled) { event.preventDefault(); $('previous').click(); }
 });
@@ -281,6 +371,7 @@ let timer;
 function resize() {
   clearTimeout(timer);
   timer = setTimeout(() => {
+    if (epub) { restoreChapterScroll(book.scrollProgress || 0); return; }
     if (pdf && document.activeElement !== $('page') && $('viewport').clientWidth !== renderedWidth) renderPage(pageNumber, false);
   }, 180);
 }

@@ -16,8 +16,9 @@ function validateState(value) {
     if (!book || !BOOK_ID.test(book.id) || ids.has(book.id) || typeof book.title !== 'string' || !book.title.trim() || typeof book.filename !== 'string' || path.basename(book.filename) !== book.filename || !Number.isInteger(book.page) || book.page < 1 || !Number.isInteger(book.totalPages) || book.totalPages < 0 || book.totalPages > MAX_PAGES || (book.totalPages && book.page > book.totalPages) || (!book.totalPages && book.page !== 1)) {
       throw new Error('Invalid book record');
     }
+    if (book.format !== undefined && !['pdf', 'epub'].includes(book.format)) throw new Error('Invalid book format');
     ids.add(book.id);
-    state.books.push({ id: book.id, title: book.title.slice(0, 300), filename: book.filename, page: book.page, totalPages: book.totalPages, lastOpened: Number.isFinite(book.lastOpened) && book.lastOpened >= 0 ? book.lastOpened : 0 });
+    state.books.push({ format: book.format || 'pdf', scrollProgress: Number.isFinite(book.scrollProgress) && book.scrollProgress >= 0 && book.scrollProgress <= 1 ? book.scrollProgress : 0, id: book.id, title: book.title.slice(0, 300), filename: book.filename, page: book.page, totalPages: book.totalPages, lastOpened: Number.isFinite(book.lastOpened) && book.lastOpened >= 0 ? book.lastOpened : 0 });
   }
   state.activeBookId = ids.has(value.activeBookId) ? value.activeBookId : null;
   state.alwaysOnTop = value.alwaysOnTop === true;
@@ -48,7 +49,7 @@ class LibraryStore {
       catch {
         // Preserve the original metadata for recovery instead of replacing it silently.
         await fs.rename(store.filename, path.join(directory, `library.corrupt-${Date.now()}-${randomUUID()}.json`));
-        store.recoveryNotice = 'The saved library index was damaged. Its original file and your PDFs have been preserved in the app data folder. Import your PDFs again to rebuild the shelf.';
+        store.recoveryNotice = 'The saved library index was damaged. Its original file and your books have been preserved in the app data folder. Import your books again to rebuild the shelf.';
         await store.persist(store.state);
       }
     }
@@ -96,12 +97,15 @@ class LibraryStore {
     for (const filename of filenames) {
       try {
         const stat = await fs.stat(filename);
-        if (!stat.isFile() || stat.size > MAX_PDF_BYTES) throw new Error('Choose a PDF smaller than 200 MB.');
+        if (!stat.isFile() || stat.size > MAX_PDF_BYTES) throw new Error('Choose a PDF or EPUB smaller than 200 MB.');
         const bytes = await fs.readFile(filename);
-        if (bytes.length > MAX_PDF_BYTES || bytes.subarray(0, 1024).indexOf('%PDF-') < 0) throw new Error('This file does not appear to be a PDF.');
+        if (bytes.length > MAX_PDF_BYTES) throw new Error('Choose a PDF or EPUB smaller than 200 MB.');
+        const format = path.extname(filename).toLowerCase() === '.epub' ? 'epub' : 'pdf';
+        if (format === 'epub') (await import('./epub.mjs')).readEpubArchive(bytes);
+        else if (bytes.subarray(0, 1024).indexOf('%PDF-') < 0) throw new Error('This file does not appear to be a PDF or EPUB book.');
         const id = createHash('sha256').update(bytes).digest('hex');
         await this.mutate(async draft => {
-          const target = path.join(this.booksDirectory, `${id}.pdf`);
+          const target = path.join(this.booksDirectory, `${id}.${format}`);
           // A duplicate import can restore a missing copy without resetting progress.
           try { await fs.access(target); }
           catch (error) {
@@ -112,7 +116,7 @@ class LibraryStore {
           }
           if (!draft.books.some(book => book.id === id)) {
             const name = path.basename(filename);
-            draft.books.push({ id, title: name.replace(/\.pdf$/i, '').slice(0, 300) || 'Untitled document', filename: name, page: 1, totalPages: 0, lastOpened: 0 });
+            draft.books.push({ id, format, scrollProgress: 0, title: name.replace(/\.(pdf|epub)$/i, '').slice(0, 300) || 'Untitled document', filename: name, page: 1, totalPages: 0, lastOpened: 0 });
           }
           if (!draft.activeBookId) draft.activeBookId = id;
         });
@@ -132,14 +136,16 @@ class LibraryStore {
   }
 
   async readBook(id) {
-    this.requireBook(id);
-    return new Uint8Array(await fs.readFile(path.join(this.booksDirectory, `${id}.pdf`)));
+    const book = this.requireBook(id);
+    return new Uint8Array(await fs.readFile(path.join(this.booksDirectory, `${id}.${book.format || 'pdf'}`)));
   }
 
   async saveProgress(progress) {
     if (!progress || !Number.isInteger(progress.page) || !Number.isInteger(progress.totalPages) || progress.totalPages < 1 || progress.totalPages > MAX_PAGES || progress.page < 1 || progress.page > progress.totalPages) throw new Error('Invalid page position.');
+    if (progress.scrollProgress !== undefined && (!Number.isFinite(progress.scrollProgress) || progress.scrollProgress < 0 || progress.scrollProgress > 1)) throw new Error('Invalid reading position.');
     await this.mutate(draft => {
       const book = this.requireBook(progress.id, draft);
+      book.scrollProgress = progress.scrollProgress ?? 0;
       book.page = progress.page; book.totalPages = progress.totalPages; book.lastOpened = Date.now();
       draft.activeBookId = book.id;
     });
@@ -147,11 +153,12 @@ class LibraryStore {
   }
 
   async removeBook(id) {
+    let format;
     await this.mutate(draft => {
-      this.requireBook(id, draft);
+      format = this.requireBook(id, draft).format || 'pdf';
       draft.books = draft.books.filter(book => book.id !== id);
       if (draft.activeBookId === id) draft.activeBookId = [...draft.books].sort((a, b) => b.lastOpened - a.lastOpened)[0]?.id || null;
-    }, () => fs.rm(path.join(this.booksDirectory, `${id}.pdf`), { force: true }));
+    }, () => fs.rm(path.join(this.booksDirectory, `${id}.${format}`), { force: true }));
     // Cleanup stays inside the mutation queue, after the metadata commit, so a
     // simultaneous reimport cannot accidentally lose its newly restored file.
     return this.snapshot();

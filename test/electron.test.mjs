@@ -66,7 +66,7 @@ test('the native app imports, shows update states, pins, resizes and restores it
     await application.evaluate(({ dialog }, filename) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filename] });
     }, original);
-    await page.getByRole('button', { name: 'Open PDF', exact: true }).click();
+    await page.getByRole('button', { name: 'Open book', exact: true }).click();
     await waitForPage(page, 1);
     assert.match(await page.locator('#text-content').textContent(), /Manor Farm/);
     assert.equal(await page.locator('#book-title').textContent(), 'Animal Farm');
@@ -250,6 +250,87 @@ test('the native app imports, shows update states, pins, resizes and restores it
     await page.getByRole('button', { name: 'Show bookshelf', exact: true }).click();
     assert.match(await page.locator('#books').textContent(), /Animal Farm/);
     assert.match(await page.locator('#books').textContent(), /Page 7 of 71/);
+  } finally {
+    if (application) await application.close();
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('EPUB chapters, images, fonts and scroll position survive restart without running book scripts', { timeout: 120_000 }, async () => {
+  const { createEpub } = await import('./fixtures/epub-fixture.mjs');
+  const directory = await mkdtemp(path.join(tmpdir(), 'folio-epub-test-'));
+  const profile = path.join(directory, 'profile');
+  const original = path.join(directory, 'Quiet Garden.epub');
+  await mkdir(profile); await writeFile(original, createEpub());
+  const wrapper = path.join(directory, 'launch.cjs');
+  await writeFile(wrapper, `const { app } = require('electron');\napp.setPath('userData', ${JSON.stringify(profile)});\nrequire(${JSON.stringify(path.join(desktop, 'main.cjs'))});\n`);
+  const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS;
+  const args = [wrapper];
+  if (process.platform === 'linux') args.unshift('--no-sandbox', '--ozone-platform=headless', '--disable-gpu');
+  let application;
+  const launch = async () => {
+    application = await electron.launch({ executablePath: require('electron'), args, env });
+    const page = await application.firstWindow(); page.setDefaultTimeout(20000); return page;
+  };
+  try {
+    let page = await launch();
+    const externalRequests = [];
+    page.on('request', request => { if (/^https?:/.test(request.url())) externalRequests.push(request.url()); });
+    await page.locator('#welcome').waitFor();
+    await application.evaluate(({ dialog }, filename) => {
+      dialog.showOpenDialog = async (_window, options) => {
+        if (!options.filters.some(filter => filter.extensions.includes('epub'))) throw new Error('EPUB missing from file picker');
+        return { canceled: false, filePaths: [filename] };
+      };
+    }, original);
+    await page.locator('#welcome-import').click();
+    await waitForPage(page, 1);
+    assert.match(await page.locator('#text-content').textContent(), /Morning in the garden/);
+    assert.equal(await page.getByLabel('Chapter', { exact: true }).inputValue(), '1');
+    assert(await page.getByRole('button', { name: 'Previous chapter', exact: true }).isDisabled());
+    assert(await page.locator('#text-content img').evaluate(img => img.complete && img.naturalWidth > 0));
+    assert.equal(await page.evaluate(() => window.epubExecuted), undefined);
+    assert.equal(await page.locator('#text-content script, #text-content iframe, #text-content [onclick]').count(), 0);
+    assert.deepEqual(externalRequests, []);
+    await page.getByText('Read the evening chapter', { exact: true }).click();
+    await waitForPage(page, 2);
+    assert.match(await page.locator('#text-content').textContent(), /Evening in the garden/);
+    assert(await page.locator('#viewport').evaluate(el => el.scrollTop > 0));
+    await page.keyboard.press('Escape');
+    assert(await page.locator('#view-settings').isHidden());
+    await page.getByLabel('Book font', { exact: true }).selectOption('book');
+    await page.keyboard.press('Escape');
+    await page.locator('#viewport').evaluate(el => { el.scrollTop = (el.scrollHeight - el.clientHeight) * .45; });
+    await page.waitForFunction(async () => {
+      const library = await window.desktopReader.getLibrary();
+      return Math.abs(library.books[0].scrollProgress - .45) < .02;
+    });
+    if (process.env.FOLIO_TEST_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.FOLIO_TEST_SCREENSHOTS, 'folio-epub-reader.png') });
+    await application.close(); application = null; await rm(original);
+    page = await launch();
+    await waitForPage(page, 2);
+    assert.equal(await page.getByLabel('Book font', { exact: true }).inputValue(), 'book');
+    const restored = await page.locator('#viewport').evaluate(el => el.scrollTop / (el.scrollHeight - el.clientHeight));
+    assert(Math.abs(restored - .45) < .03, 'EPUB restores the position inside the chapter');
+    assert(await page.getByRole('button', { name: 'Next chapter', exact: true }).isDisabled());
+    await page.getByRole('button', { name: 'Previous chapter', exact: true }).click();
+    await waitForPage(page, 1);
+    assert.match(await page.locator('#text-content').textContent(), /Morning in the garden/);
+    await page.getByRole('button', { name: 'Next chapter', exact: true }).click();
+    await waitForPage(page, 2);
+    assert.equal(await page.locator('#viewport').evaluate(el => el.scrollTop), 0);
+    const protectedFile = path.join(directory, 'Protected.epub');
+    await writeFile(protectedFile, createEpub({ 'META-INF/encryption.xml': new TextEncoder().encode('<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><EncryptedData xmlns="http://www.w3.org/2001/04/xmlenc#"><EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/></EncryptedData></encryption>') }));
+    await application.evaluate(({ dialog }, filename) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filename] });
+    }, protectedFile);
+    await page.keyboard.press('Control+o');
+    await page.waitForFunction(() => document.querySelector('#loading').textContent.includes('DRM-free'));
+    assert(await page.locator('#text-page').isHidden());
+    await page.keyboard.press('Escape');
+    await page.locator('.book-open').filter({ hasText: 'Quiet Garden' }).click();
+    await waitForPage(page, 2);
+    assert.match(await page.locator('#text-content').textContent(), /Evening in the garden/);
   } finally {
     if (application) await application.close();
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

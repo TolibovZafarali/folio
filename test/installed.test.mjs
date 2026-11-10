@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { access, copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
@@ -173,6 +173,23 @@ test('the installed Windows app keeps an existing portable library and enables i
     const updates = await page.evaluate(() => window.desktopReader.getUpdateState());
     assert.notEqual(updates.status, 'disabled');
     assert.equal(updates.version, metadata.version);
+    // Import from the installed app as well: this catches missing packaged EPUB
+    // parser dependencies without altering the legacy PDF retention assertion.
+    const { createEpub } = await import('./fixtures/epub-fixture.mjs');
+    const epubFile = path.join(directory, 'Installed EPUB.epub');
+    await writeFile(epubFile, createEpub());
+    await application.evaluate(({ dialog }, filename) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filename] });
+    }, epubFile);
+    await page.keyboard.press('Control+o');
+    await page.waitForFunction(() => document.querySelector('#reader').getAttribute('aria-busy') === 'false' && document.querySelector('#text-content').textContent.includes('Morning in the garden'));
+    assert.equal(await page.getByLabel('Chapter', { exact: true }).inputValue(), '1');
+    assert(await page.locator('#text-content img').evaluate(img => img.naturalWidth > 0));
+    await application.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Remove book', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#reader').getAttribute('aria-busy') === 'false' && document.querySelector('#text-page').dataset.page === '7' && document.querySelector('#book-title').textContent === 'Animal Farm');
+
     await application.close(); application = null;
     await assertLibraryPreserved();
   } finally {
