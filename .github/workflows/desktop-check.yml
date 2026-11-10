@@ -1,0 +1,79 @@
+name: Windows desktop checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.cjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.*'
+      - 'renderer/**'
+      - 'scripts/**'
+      - 'test/**'
+      - '.github/workflows/desktop-check.yml'
+      - '.github/workflows/desktop-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-desktop-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: Test installed Windows reader
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        id: install
+        run: ./scripts/check-command.ps1 -Title 'Dependency installation' -Command npm -CommandArguments @('ci')
+
+      - name: Test storage, updater, and release verification
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: ./scripts/check-command.ps1 -Title 'Storage and updater tests' -Command npm -CommandArguments @('test')
+
+      - name: Test desktop import, updates, and restart persistence
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: ./scripts/check-command.ps1 -Title 'Desktop application tests' -Command npm -CommandArguments @('run', 'test:app')
+
+      - name: Build Windows installer
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: ./scripts/check-command.ps1 -Title 'Windows installer build' -Command npm -CommandArguments @('run', 'build')
+
+      - name: Test installed app and existing library
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./scripts/check-command.ps1 -Title 'Installed Windows application tests' -Command npm -CommandArguments @('run', 'test:installed')
+
+      - name: Verify update manifest and artifact checksums
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./scripts/check-command.ps1 -Title 'Update manifest verification' -Command node -CommandArguments @('scripts/verify-update.cjs')
+
+      - name: Preserve diagnostic logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-check-logs
+          path: ${{ runner.temp }}/folio-desktop-check/*.log
+          if-no-files-found: ignore
+          retention-days: 7
