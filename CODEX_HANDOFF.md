@@ -58,11 +58,11 @@ Keep these values and contracts stable during the repository move:
 
 Do not move or erase the data directory just to reorganize source. Import copies remain separate from original files; users should retain their books and page positions across installation updates.
 
-## Existing users do not automatically move update feeds
+## Existing users migrate through the built-in updater
 
-Already installed 1.1.1 clients contain update settings pointing to `TolibovZafarali/any-to-pdf`. They will keep polling that repository after this source is uploaded elsewhere.
+Version 1.1.1 clients check `TolibovZafarali/any-to-pdf`. That repository's `reader-v1.1.2` migration release provides the same installer, blockmap, and update manifest as `TolibovZafarali/folio`, with pinned checksums. Its workflow only publishes the migration tag; the original website's main branch is unchanged.
 
-A new installer built with the new destination can be installed manually over the existing app while preserving the identity/data directory above. Automatic migration instead requires a separately planned bridge release through the old update feed. Do not claim existing clients migrated merely because the new source metadata or repository changed.
+Existing users click **Check for updates**, then **Update and restart**. The updater saves their place and installs 1.1.2 while retaining application identity and library data. The new installer embeds the `folio` update destination, so subsequent updates use this repository. Keep the original migration release available for older installations.
 
 ## Structure
 

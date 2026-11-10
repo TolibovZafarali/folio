@@ -12,7 +12,7 @@ Version 1.1.2 moves reading tools into the bookshelf panel, places navigation be
 
 Windows installers target Windows 10/11, 64-bit, and install for your account without administrator access. The application is unsigned, so Windows may show a publisher or SmartScreen prompt. Check the release checksums before installing.
 
-Existing 1.1.1 installations still check the original `TolibovZafarali/any-to-pdf` update feed. Install version 1.1.2 manually over the existing app to switch feeds while retaining books and progress. Moving the source alone does not migrate installed clients.
+In an existing 1.1.1 installation, click **Check for updates**, then **Update and restart**. The original `TolibovZafarali/any-to-pdf` feed also serves the verified 1.1.2 installer, so the built-in updater can preserve your books and progress while switching to this repository for future updates.
 
 ## Reading and local data
 
@@ -74,4 +74,4 @@ For a subsequent release:
 
 The included Windows release workflow runs tests, builds and tests the installed app, validates the release files, uploads them to a draft GitHub Release, and publishes the complete release as latest. It rejects mismatched versions and never replaces an already published release.
 
-Existing 1.1.1 installations continue checking the **original repository**, even after source code moves. They need a manually installed build configured for the new repository, or a separately planned bridge release through the old feed. Changing this source bundle cannot change already installed update settings.
+The migration release on the original repository delivers the same verified 1.1.2 installer through existing clients’ update buttons. Once updated, clients check `TolibovZafarali/folio` for future releases.

@@ -138,7 +138,7 @@ jobs:
 
           Version 1.1.2 moves reading tools into the bookshelf panel, places Previous and Next page below the book content, and adds Modern sans, Classic serif, Book serif, and Monospace choices for Text view. Your font choice is remembered after restart.
 
-          If you have version 1.1.1 from `TolibovZafarali/any-to-pdf`, install this version manually once to switch to this repository's update feed. Your books and reading progress are preserved. The previous installation cannot discover this release through its old feed.
+          If you have version 1.1.1 from `TolibovZafarali/any-to-pdf`, click Check for updates, then Update and restart. The original feed provides the verified 1.1.2 migration release, preserving your books and reading progress and switching future updates to this repository.
 
           If you used portable version 1.0.0, close it and install this version once. It opens the same local library from `%APPDATA%\Folio Reader\`; your books and saved pages are retained. Future versions can be downloaded and installed from the app's update controls. Installing updates or uninstalling the app retains this library data.
 
