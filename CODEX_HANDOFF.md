@@ -2,7 +2,7 @@
 
 ## What this bundle contains
 
-This is the Windows desktop app extracted from `TolibovZafarali/any-to-pdf`, with the project rooted directly at `package.json`. The original source bundle was version **1.1.1**; the current application is **1.2.0**. It contains the Electron main process and preload, PDF/EPUB reader interface, persistent local library, updater controller, tests, Windows build/release workflows, and a local PDF test fixture.
+This is the Windows desktop app extracted from `TolibovZafarali/any-to-pdf`, with the project rooted directly at `package.json`. The original source bundle was version **1.1.1**; the current application is **1.2.1**. It contains the Electron main process and preload, PDF/EPUB reader interface, persistent local library, updater controller, tests, Windows build/release workflows, and a local PDF test fixture.
 
 The website and `/books` web application are not part of this project. The source move preserved runtime behavior. Version 1.1.2 subsequently adds a quieter reading layout and remembered font choices. The bundle excludes `.git`, dependencies, built interfaces, release binaries, generated PDF.js assets, environment files, and user libraries. It contains no credentials.
 
@@ -31,7 +31,7 @@ The unit/native tests use isolated temporary profiles and the included `test/fix
 
 No release is published as part of the source migration. To prepare a later release:
 
-1. Choose a version greater than 1.2.0 and update `package.json` and `package-lock.json` together.
+1. Choose a version greater than 1.2.1 and update `package.json` and `package-lock.json` together.
 2. Run the tests and Windows installer checks on a clean Windows profile:
 
    ```sh
@@ -76,3 +76,7 @@ Existing users click **Check for updates**, then **Update and restart**. The upd
 - `.github/workflows/`: standalone CI and Windows release automation
 
 This handoff is a source transfer, not a newly published application release.
+
+## EPUB formatting in 1.2.1
+
+The renderer resolves local linked/imported CSS, embedded styles, and inline declarations against an inert chapter document. Only supported text formatting is copied to rendered elements; publisher fonts, selectors, IDs, resource URLs, and layout/visibility rules are not installed in the reader. CSS specificity, importance, source order, and inheritance are retained. The reading font remains user controlled. No library schema or application identity changes are required. Native and installed-app tests cover existing EPUB positions and PDF libraries.

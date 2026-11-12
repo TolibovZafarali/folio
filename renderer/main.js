@@ -230,6 +230,10 @@ async function renderEpubPage(number, fraction = 0, fragment = '') {
     $('zoom-reset').textContent = `${Math.round(zoom * 100)}%`;
     applyMode();
     await Promise.all(chapter.images.map(img => img.decode().catch(() => {})));
+    // Finish font/layout work before restoring a saved fraction. Otherwise a
+    // pending first layout can move the viewport after we mark the book ready.
+    await globalThis.document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     if (token !== generation || run !== revision) return;
     restoreChapterScroll(fraction);
     if (fragment) chapter.anchors.get(fragment)?.scrollIntoView({ block: 'start' });

@@ -1,5 +1,6 @@
 import { strFromU8 } from 'fflate';
 import { readEpubArchive } from '../epub.mjs';
+import { chapterStyles } from './epub-styles.js';
 
 const origin = 'https://epub.invalid';
 function resolve(reference, base = '') {
@@ -19,7 +20,7 @@ function xml(files, path) {
   if (elements(doc, 'parsererror').length) throw new Error('This EPUB contains a damaged document.');
   return doc;
 }
-const allowed = new Set('p h1 h2 h3 h4 h5 h6 blockquote em strong b i u s del sub sup pre code ul ol li br hr div span section figure figcaption table thead tbody tfoot tr th td dl dt dd a img'.split(' '));
+const allowed = new Set('p h1 h2 h3 h4 h5 h6 blockquote em strong b i u s del strike ins cite small sub sup pre code ul ol li br hr div span section figure figcaption table thead tbody tfoot tr th td dl dt dd a img'.split(' '));
 const dropped = new Set('script style iframe object embed form input button textarea select link meta base audio video'.split(' '));
 const raster = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
@@ -55,6 +56,8 @@ export function openEpub(bytes) {
       const doc = xml(files, chapter.path);
       const body = elements(doc, 'body')[0];
       if (!body) throw new Error('This EPUB chapter has no readable content.');
+      const applyStyles = chapterStyles(doc, chapter.path, path =>
+        Object.hasOwn(files, path) && (resources.get(path)?.type === 'text/css' || /\.css$/i.test(path)) ? strFromU8(files[path]) : null, resolve);
       let count = 0;
       const anchors = new Map();
       const images = [];
@@ -65,7 +68,7 @@ export function openEpub(bytes) {
         const name = node.localName.toLowerCase();
         if (dropped.has(name)) return document.createDocumentFragment();
         // SVG cover wrappers commonly contain an image reference. Only load the
-        // referenced raster image, never SVG scripts or the book's own styles.
+        // referenced raster image, never SVG scripts.
         if (name === 'img' || name === 'image') {
           const href = node.getAttribute('src') || node.getAttribute('href') || node.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
           const target = resolve(href, chapter.path);
@@ -74,9 +77,11 @@ export function openEpub(bytes) {
           const img = document.createElement('img');
           const url = URL.createObjectURL(new Blob([files[target.path]], { type: resource.type }));
           urls.push(url); img.src = url; img.alt = node.getAttribute('alt') || '';
+          applyStyles(node, img);
           images.push(img); return img;
         }
         const element = document.createElement(allowed.has(name) ? name : 'div');
+        applyStyles(node, element);
         const id = node.getAttribute('id') || node.getAttributeNS('http://www.w3.org/XML/1998/namespace', 'id');
         if (id) anchors.set(id, element);
         if (['ltr', 'rtl', 'auto'].includes(node.getAttribute('dir'))) element.dir = node.getAttribute('dir');
@@ -96,8 +101,11 @@ export function openEpub(bytes) {
         for (const child of node.childNodes) element.append(copy(child, depth + 1));
         return element;
       }
-      const content = document.createDocumentFragment();
-      for (const child of body.childNodes) content.append(copy(child));
+      // Retain the html/body inheritance chain without importing their IDs or
+      // classes, which could collide with the reader's own controls.
+      const content = document.createElement('div');
+      applyStyles(doc.documentElement, content);
+      content.append(copy(body));
       return { content, anchors, images, direction: ['ltr', 'rtl'].includes(body.getAttribute('dir')) ? body.getAttribute('dir') : 'auto' };
     },
   };

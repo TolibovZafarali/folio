@@ -136,7 +136,7 @@ jobs:
 
           Download `Folio-Reader-Setup-<version>-x64.exe` and run it. The per-user installer requires no administrator access. Import your own PDFs or DRM-free EPUBs, resize the window, and enable Always on top when needed. Imported books and reading positions are saved locally and restored when you reopen the app.
 
-          Version 1.2.0 adds EPUB support. Use Open book to import PDFs or DRM-free EPUBs. EPUBs display reflowed chapters, embedded images, and internal chapter links with your chosen book font. The app saves both the chapter and the position within it, including after restart. Existing PDFs and saved pages are preserved. Encrypted EPUBs are not supported.
+          Version 1.2.1 fixes EPUB formatting: italics, bold, small caps, underline, strikethrough, superscripts, subscripts, indentation, and alignment are preserved, including linked and embedded stylesheets and inline formatting. Your selected reading font takes precedence over publisher fonts. Saved EPUB positions are restored after chapter layout settles. Existing books, EPUB progress, PDF pages, and font choices are retained.
 
           In version 1.1.2 or newer, click Check for updates, then Update and restart. Your books, saved places, and font choice are preserved.
 

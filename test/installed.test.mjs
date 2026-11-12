@@ -39,12 +39,16 @@ test('the installed Windows app keeps an existing portable library and enables i
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.NODE_OPTIONS;
   const processOptions = { env, timeout: 120_000, windowsHide: true, windowsVerbatimArguments: true };
-  let profileCreated = false, profileSeeded = false, application, bookId;
+  let profileCreated = false, profileSeeded = false, application, bookId, epubId, epubBytes;
 
   async function assertLibraryPreserved() {
     const saved = JSON.parse(await readFile(path.join(profile, 'library.json'), 'utf8'));
     assert.equal(saved.version, 1, 'the existing library format remains readable');
-    assert.equal(saved.books.length, 1);
+    assert.equal(saved.books.length, 2);
+    const retainedEpub = saved.books.find(book => book.id === epubId);
+    assert.equal(retainedEpub.page, 2);
+    assert(Math.abs(retainedEpub.scrollProgress - .45) < .03);
+    assert.deepEqual(await readFile(path.join(profile, 'books', `${epubId}.epub`)), epubBytes);
     assert.equal(saved.activeBookId, bookId);
     assert.equal(saved.books[0].id, bookId);
     assert.equal(saved.books[0].title, 'Animal Farm');
@@ -71,6 +75,15 @@ test('the installed Windows app keeps an existing portable library and enables i
     assert.deepEqual(imported.errors, []);
     assert.equal(imported.importedIds.length, 1);
     bookId = imported.importedIds[0];
+    const { createEpub } = await import('./fixtures/epub-fixture.mjs');
+    epubBytes = createEpub();
+    const existingEpub = path.join(directory, 'Existing EPUB.epub');
+    await writeFile(existingEpub, epubBytes);
+    const epubImport = await store.importBooks([existingEpub]);
+    assert.deepEqual(epubImport.errors, []);
+    epubId = epubImport.importedIds[0];
+    await store.saveProgress({ id: epubId, page: 2, totalPages: 2, scrollProgress: .45 });
+    await rm(existingEpub);
     await store.saveProgress({ id: bookId, page: 7, totalPages: 71 });
     await store.setAlwaysOnTop(true);
     await store.setWindowBounds({ x: 25, y: 30, width: 420, height: 580 });
@@ -173,21 +186,16 @@ test('the installed Windows app keeps an existing portable library and enables i
     const updates = await page.evaluate(() => window.desktopReader.getUpdateState());
     assert.notEqual(updates.status, 'disabled');
     assert.equal(updates.version, metadata.version);
-    // Import from the installed app as well: this catches missing packaged EPUB
-    // parser dependencies without altering the legacy PDF retention assertion.
-    const { createEpub } = await import('./fixtures/epub-fixture.mjs');
-    const epubFile = path.join(directory, 'Installed EPUB.epub');
-    await writeFile(epubFile, createEpub());
-    await application.evaluate(({ dialog }, filename) => {
-      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filename] });
-    }, epubFile);
-    await page.keyboard.press('Control+o');
-    await page.waitForFunction(() => document.querySelector('#reader').getAttribute('aria-busy') === 'false' && document.querySelector('#text-content').textContent.includes('Morning in the garden'));
-    assert.equal(await page.getByLabel('Chapter', { exact: true }).inputValue(), '1');
-    assert(await page.locator('#text-content img').evaluate(img => img.naturalWidth > 0));
-    await application.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
+    // Open the EPUB imported before installation, with its original removed.
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Remove book', exact: true }).click();
+    await page.getByRole('button', { name: /Existing EPUB Chapter 2 of 2/ }).click();
+    await page.waitForFunction(() => document.querySelector('#reader').getAttribute('aria-busy') === 'false' && document.querySelector('#text-page').dataset.page === '2');
+    const restored = await page.locator('#viewport').evaluate(el => el.scrollTop / (el.scrollHeight - el.clientHeight));
+    assert(Math.abs(restored - .45) < .03, 'installation retains the saved EPUB position');
+    assert.equal(await page.getByText('Styled italic', { exact: true }).evaluate(el => getComputedStyle(el).fontStyle), 'italic');
+    assert.equal(await page.getByText('Styled small caps', { exact: true }).evaluate(el => getComputedStyle(el).fontVariantCaps), 'small-caps');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /Animal Farm Page 7 of 71/ }).click();
     await page.waitForFunction(() => document.querySelector('#reader').getAttribute('aria-busy') === 'false' && document.querySelector('#text-page').dataset.page === '7' && document.querySelector('#book-title').textContent === 'Animal Farm');
 
     await application.close(); application = null;

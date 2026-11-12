@@ -272,6 +272,36 @@ test('EPUB chapters, images, fonts and scroll position survive restart without r
     application = await electron.launch({ executablePath: require('electron'), args, env });
     const page = await application.firstWindow(); page.setDefaultTimeout(20000); return page;
   };
+  async function assertFormatting(page) {
+    const style = (text, property) => page.getByText(text, { exact: true }).evaluate((el, key) => getComputedStyle(el).getPropertyValue(key), property);
+    for (const text of ['Semantic italic', 'Styled italic', 'Inherited italic', 'Embedded stylesheet']) assert.equal(await style(text, 'font-style'), 'italic', text);
+    for (const text of ['Semantic bold', 'Styled bold', 'Cascade paragraph']) assert.equal(await style(text, 'font-weight'), '700', text);
+    assert.equal(await style('Styled small caps', 'font-variant-caps'), 'small-caps');
+    for (const text of ['Semantic underline', 'Styled underline']) assert.equal(await style(text, 'text-decoration-line'), 'underline');
+    for (const text of ['Semantic strike', 'Styled strike']) assert.equal(await style(text, 'text-decoration-line'), 'line-through');
+    for (const prefix of ['Semantic', 'Styled']) {
+      assert.equal(await style(`${prefix} superscript`, 'vertical-align'), 'super');
+      assert.equal(await style(`${prefix} subscript`, 'vertical-align'), 'sub');
+    }
+    assert.equal(await style('Indented aligned paragraph', 'text-indent'), '30px');
+    assert.equal(await style('Indented aligned paragraph', 'margin-left'), '15px');
+    assert.equal(await style('Indented aligned paragraph', 'text-align'), 'center');
+    assert.equal(await style('Hanging paragraph', 'text-indent'), '-15px');
+    assert.equal(await style('Hanging paragraph', 'padding-left'), '15px');
+    assert.equal(await style('Legacy alignment', 'text-align'), 'right');
+    assert.equal(await style('Screen media rule', 'text-align'), 'right');
+    assert.equal(await style('Print-only rule', 'font-style'), 'normal');
+    assert.equal(await style('Inline shorthand', 'font-style'), 'italic');
+    assert.equal(await style('Inline shorthand', 'font-weight'), '700');
+    assert.equal(await style('Inline shorthand', 'font-variant-caps'), 'small-caps');
+    assert.equal(await style('Inline shorthand', 'text-decoration-line'), 'underline line-through');
+    const family = await page.locator('#text-content').evaluate(el => getComputedStyle(el).fontFamily);
+    assert.equal(await style('Cascade paragraph', 'font-family'), family);
+    assert.equal(await style('Inline shorthand', 'font-family'), family);
+    assert.equal(await style('Styled italic', 'background-image'), 'none');
+    assert.equal(await page.locator('#text-content [id], #text-content style, #text-content link').count(), 0);
+    assert(await page.locator('#reader').isVisible());
+  }
   try {
     let page = await launch();
     const externalRequests = [];
@@ -295,10 +325,15 @@ test('EPUB chapters, images, fonts and scroll position survive restart without r
     await page.getByText('Read the evening chapter', { exact: true }).click();
     await waitForPage(page, 2);
     assert.match(await page.locator('#text-content').textContent(), /Evening in the garden/);
+    await assertFormatting(page);
     assert(await page.locator('#viewport').evaluate(el => el.scrollTop > 0));
     await page.keyboard.press('Escape');
     assert(await page.locator('#view-settings').isHidden());
-    await page.getByLabel('Book font', { exact: true }).selectOption('book');
+    for (const font of ['sans', 'serif', 'mono', 'book']) {
+      await page.getByLabel('Book font', { exact: true }).selectOption(font);
+      await assertFormatting(page);
+    }
+    assert.deepEqual(externalRequests, [], 'book CSS cannot fetch remote styles, images or fonts');
     await page.keyboard.press('Escape');
     await page.locator('#viewport').evaluate(el => { el.scrollTop = (el.scrollHeight - el.clientHeight) * .45; });
     await page.waitForFunction(async () => {
@@ -312,6 +347,9 @@ test('EPUB chapters, images, fonts and scroll position survive restart without r
     assert.equal(await page.getByLabel('Book font', { exact: true }).inputValue(), 'book');
     const restored = await page.locator('#viewport').evaluate(el => el.scrollTop / (el.scrollHeight - el.clientHeight));
     assert(Math.abs(restored - .45) < .03, 'EPUB restores the position inside the chapter');
+    await assertFormatting(page);
+    const persisted = await page.evaluate(async () => (await window.desktopReader.getLibrary()).books[0].scrollProgress);
+    assert(Math.abs(persisted - .45) < .03, 'startup layout does not overwrite the saved place');
     assert(await page.getByRole('button', { name: 'Next chapter', exact: true }).isDisabled());
     await page.getByRole('button', { name: 'Previous chapter', exact: true }).click();
     await waitForPage(page, 1);
