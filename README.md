@@ -2,17 +2,17 @@
 
 A compact desktop app for your own PDF and EPUB books. Open a book, resize the window, and optionally pin it above other applications. The app keeps its own copy of each imported book and remembers your page, bookshelf, window size, and pin setting. Reading works offline.
 
-This directory is the complete standalone source project, version **1.2.1**. It has no dependency on a website or a parent repository. The project is maintained at [TolibovZafarali/folio](https://github.com/TolibovZafarali/folio). See [CODEX_HANDOFF.md](CODEX_HANDOFF.md) for migration and release notes.
+This directory is the complete standalone source project, version **1.2.2**. It has no dependency on a website or a parent repository. The project is maintained at [TolibovZafarali/folio](https://github.com/TolibovZafarali/folio). See [CODEX_HANDOFF.md](CODEX_HANDOFF.md) for migration and release notes.
 
 ## Windows download
 
-[Download Folio Reader 1.2.1 for Windows](https://github.com/TolibovZafarali/folio/releases/download/reader-v1.2.1/Folio-Reader-Setup-1.2.1-x64.exe). The [release page](https://github.com/TolibovZafarali/folio/releases/tag/reader-v1.2.1) includes checksums and update files.
+[Download Folio Reader 1.2.2 for Windows](https://github.com/TolibovZafarali/folio/releases/download/reader-v1.2.2/Folio-Reader-Setup-1.2.2-x64.exe). The [release page](https://github.com/TolibovZafarali/folio/releases/tag/reader-v1.2.2) includes checksums and update files.
 
-Version 1.2.1 preserves EPUB italics, bold, small caps, underline, strikethrough, superscripts, subscripts, indentation, and alignment, including formatting from book stylesheets. Your selected reading font still takes precedence. Existing books, chapters, saved positions, and PDF pages are retained.
+Version 1.2.2 preserves EPUB italics, bold, small caps, underline, strikethrough, superscripts, subscripts, indentation, and alignment, including formatting from book stylesheets. Your selected reading font still takes precedence. Existing books, chapters, saved positions, and PDF pages are retained.
 
 Windows installers target Windows 10/11, 64-bit, and install for your account without administrator access. The application is unsigned, so Windows may show a publisher or SmartScreen prompt. Check the release checksums before installing.
 
-In version 1.1.2 or newer, click **Check for updates**, then **Update and restart** to get 1.2.1.
+In version 1.1.2 or newer, click **Check for updates**, then **Update and restart** to get 1.2.2.
 
 In an existing 1.1.1 installation, click **Check for updates**, then **Update and restart**. The original `TolibovZafarali/any-to-pdf` feed also serves the verified 1.1.2 installer, so the built-in updater can preserve your books and progress while switching to this repository for future updates.
 
@@ -70,7 +70,7 @@ The package repository and GitHub updater destination are configured for `Tolibo
 
 For a subsequent release:
 
-1. Update `package.json` and `package-lock.json` to a matching version greater than `1.2.1`.
+1. Update `package.json` and `package-lock.json` to a matching version greater than `1.2.2`.
 2. Commit the tested standalone project to its intended repository.
 3. Create and push a matching `reader-vX.Y.Z` tag.
 

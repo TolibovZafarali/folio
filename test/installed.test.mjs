@@ -76,7 +76,7 @@ test('the installed Windows app keeps an existing portable library and enables i
     assert.equal(imported.importedIds.length, 1);
     bookId = imported.importedIds[0];
     const { createEpub } = await import('./fixtures/epub-fixture.mjs');
-    epubBytes = createEpub();
+    epubBytes = Buffer.from(createEpub());
     const existingEpub = path.join(directory, 'Existing EPUB.epub');
     await writeFile(existingEpub, epubBytes);
     const epubImport = await store.importBooks([existingEpub]);
